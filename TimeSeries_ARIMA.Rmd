@@ -1,0 +1,116 @@
+---
+title: "contest 2"
+author: "Rama Krishna Thelagathoti"
+date: "03/04/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+
+library(readr)
+library(dplyr)
+library(forecast)
+
+
+#Read data sets
+
+pop = read.csv("C:/STAT8456/contest2/covid_county_population_usafacts.csv", stringsAsFactors=FALSE, check.names=FALSE )
+conf = read.csv("C:/STAT8456/contest2/covid_confirmed_usafacts_Apr12.csv", stringsAsFactors=FALSE, check.names=FALSE )
+deaths = read.csv("C:/STAT8456/contest2/covid_deaths_usafacts_Apr12.csv", stringsAsFactors=FALSE, check.names=FALSE )
+
+totalpop = sum(pop$population)
+stateMedian = by(pop$population, pop$State, median)
+head(stateMedian)
+unallocatedWeights = stateMedian/totalpop
+head(unallocatedWeights)
+unallocatedWeights <- as.numeric(unallocatedWeights)
+#row 1863 doesn't seem to be proper, hence remove it
+unallocatedWeights <- unallocatedWeights[-33]
+     
+
+#str(pop)
+#str(conf)
+#str(deaths)
+
+# 1/22/2020 to 4/12/2020 total 82 dates 
+no_of_days <- 82
+error_cases <- 0
+error_deaths <- 0
+unal_count <- 1
+
+
+#forecasted to 7days
+#nrow(conf) or nrow(deaths) same number of rows 3195
+#repeat followig steps for all counties 
+ for (i in 1:nrow(conf))
+ {
+    # convert dates in row wise to column wise
+    # repeat county FIPs, County name and state for each date in column wise format
+    # from the data set [any row number,1st column] - county FIPS
+    countyFIPS <- rep(conf[i,1],no_of_days)
+    #from the data set [any row number,2nd column] - county Name
+    CountyName <- rep(conf[i,2],no_of_days)
+    #from the data set [any row number,3rd column] - state name
+    State <- rep(conf[i,3],no_of_days)
+    #we know start date as 1/22/20, for 82 days end date is 4/12/2020
+    date <- seq( as.Date("1/22/20", format = "%m/%d/%y"), by=1, len=no_of_days)
+    #select ith row and remove columsn 1,2,3,4 and result is a data frame saved in Cases
+    Cases <- conf[i, c(-1,-2,-3,-4)]
+    #convert to numeric vector
+    Cases <- as.numeric(Cases)
+    # repeast same steps for deaths also
+    Deaths <- deaths[i, c(-1,-2,-3,-4)]
+    Deaths <- as.numeric(Deaths)
+    #df is temp data frame with 82 dates, cases& deaths date wise in column format
+    df <- data.frame(date,Cases,Deaths)
+    
+    #forecasting confirmed cases using time series 
+    df.ts <- ts(df$Cases, start = min(df$date), end = max(df$date))
+    #using ARIMA model
+    df.opt <- auto.arima(df.ts)
+    df.forecast <- forecast(object = df.opt, h=7)
+    forecasted <- data.frame(df.forecast)
+    #[7,5] 7th row is 7th day forecasted number , 5th column is 95% CI
+    Cases <- round(forecasted[7,5])
+    
+    #forecasting Deaths
+    df.ts <- ts(df$Deaths, start = min(df$date), end = max(df$date))
+    df.opt <- auto.arima(df.ts)
+    df.forecast <- forecast(object = df.opt, h=7)
+    forecasted <- data.frame(df.forecast)
+    Deaths <- round(forecasted[7,5])
+    
+    #construct dataframe to write to csv file
+    countyFIPS <- conf[i,1]
+    CountyName <- conf[i,2]
+    State <- conf[i,3]
+   
+    
+   df.final <- data.frame(countyFIPS,CountyName,State,Cases, Deaths)
+   
+   # when i ==1 then col.names = TRUE, first time adds header to the CSV file
+   if (i ==1)
+    {
+        write.table(df.final, file = "final.csv", sep = ",", append = TRUE, quote = FALSE,
+          col.names = TRUE, row.names = FALSE)
+    }
+    else
+    {
+        write.table(df.final, file = "final.csv", sep = ",", append = TRUE, quote = FALSE,
+         col.names = FALSE, row.names = FALSE)  
+    }
+    
+       
+ }
+  
+
+
+  
+
+```
